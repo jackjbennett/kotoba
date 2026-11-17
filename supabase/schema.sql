@@ -65,7 +65,7 @@ returns void language plpgsql stable as $$
 begin
   if p_token is null
      or encode(sha256(convert_to(p_token, 'UTF8')), 'hex')
-        <> '796d2da97f88a946e1ddbaedd7d8b73f3667e75a9c598e5957423272faaaa796' then
+        <> '15e870b45099bbd12bdfc93f50a5bfe93d7d13aefdc8b713601544684de68742' then
     raise exception 'not allowed' using errcode = '42501';
   end if;
 end $$;
