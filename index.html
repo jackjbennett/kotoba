@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kotoba</title>
+<meta name="description" content="A native Japanese word every day, with kanji, hiragana, meaning and example sentences.">
+<meta name="theme-color" content="#B5402B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kotoba">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="words.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#FAF7F2; --surface:#FFFFFF; --surface-2:#F3EEE6; --ink:#1F1A17; --ink-2:#5E554D; --ink-3:#8C8278;
+  --line:#E6DED3; --accent:#B5402B; --accent-ink:#FFFFFF; --accent-soft:#F7E3DD; --mark:#FBE3A6;
+  --good:#2F7A4F; --good-soft:#DFF0E5; --bad:#B5402B; --bad-soft:#F7E3DD; --shadow:0 1px 2px rgba(40,30,20,.06),0 6px 24px rgba(40,30,20,.06);
+  --jp-serif:"Noto Serif JP","Yu Mincho","Hiragino Mincho ProN",serif;
+  --jp-sans:"Hiragino Sans","Yu Gothic UI","Yu Gothic","Noto Sans JP","Meiryo",system-ui,sans-serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#15120F; --surface:#201C18; --surface-2:#2A2520; --ink:#F1EBE3; --ink-2:#C4BAAE; --ink-3:#8F857A;
+    --line:#352F29; --accent:#E2684F; --accent-ink:#1A0F0B; --accent-soft:#3A221C; --mark:#5A4716;
+    --good:#6CC28F; --good-soft:#1E3427; --bad:#E2684F; --bad-soft:#3A221C; --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15120F; --surface:#201C18; --surface-2:#2A2520; --ink:#F1EBE3; --ink-2:#C4BAAE; --ink-3:#8F857A;
+  --line:#352F29; --accent:#E2684F; --accent-ink:#1A0F0B; --accent-soft:#3A221C; --mark:#5A4716;
+  --good:#6CC28F; --good-soft:#1E3427; --bad:#E2684F; --bad-soft:#3A221C; --shadow:none; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg); color:var(--ink); font:16px/1.55 var(--sans); -webkit-font-smoothing:antialiased; min-height:100vh}
+[lang="ja"]{font-family:var(--jp-sans)}
+button,input,select,textarea{font:inherit; color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+.wrap{max-width:640px; margin:0 auto; padding:0 16px}
+.top{position:sticky; top:0; z-index:5; background:color-mix(in srgb,var(--bg) 88%,transparent); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-bottom:1px solid var(--line); padding-top:env(safe-area-inset-top)}
+.top .wrap{display:flex; align-items:center; gap:12px; height:56px}
+.brand{display:flex; align-items:baseline; gap:8px; font-weight:700; letter-spacing:.01em}
+.brand .jp{font-family:var(--jp-serif); color:var(--accent); font-size:22px}
+.tabs{margin-left:auto; display:flex; gap:4px}
+.tabs button{border:0; background:none; padding:8px 12px; border-radius:999px; color:var(--ink-2); font-weight:600; font-size:15px}
+.tabs button[aria-current="page"]{background:var(--accent-soft); color:var(--accent)}
+main{padding:20px 0 calc(48px + env(safe-area-inset-bottom))}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:22px; box-shadow:var(--shadow); margin-bottom:16px}
+.eyebrow{font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3)}
+.word-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-top:10px}
+.forms{display:grid; grid-template-columns:auto 1fr; gap:2px 14px; align-items:baseline}
+.forms .lbl{font-size:12px; font-weight:600; color:var(--ink-3); text-transform:uppercase; letter-spacing:.05em}
+.kanji{font-family:var(--jp-serif); font-weight:700; font-size:clamp(44px,13vw,68px); line-height:1.15; color:var(--ink); word-break:keep-all}
+.kana{font-family:var(--jp-sans); font-size:22px; color:var(--ink-2)}
+.meaning{font-size:21px; font-weight:600; margin:14px 0 8px; line-height:1.35}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{font-size:13px; padding:3px 10px; border-radius:999px; background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line)}
+.chip.good{background:var(--good-soft); color:var(--good); border-color:transparent}
+.chip.bad{background:var(--bad-soft); color:var(--bad); border-color:transparent}
+.note{margin:14px 0 0; padding:10px 14px; border-left:3px solid var(--accent); background:var(--surface-2); border-radius:0 10px 10px 0; color:var(--ink-2); font-size:15px}
+h2{font-size:18px; margin:0 0 4px}
+h3{font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); margin:22px 0 8px}
+.examples{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+.examples li{display:flex; gap:10px; align-items:flex-start; padding:12px 14px; background:var(--surface-2); border-radius:12px}
+.examples .jp{font-size:18px; line-height:1.6; margin:0}
+.examples .en{margin:2px 0 0; color:var(--ink-2); font-size:15px}
+.examples .text{flex:1; min-width:0}
+mark{background:var(--mark); color:inherit; border-radius:4px; padding:0 2px}
+.icon-btn{flex:none; width:40px; height:40px; border-radius:50%; border:1px solid var(--line); background:var(--surface); display:grid; place-items:center; color:var(--ink-2)}
+.icon-btn:hover{color:var(--accent); border-color:var(--accent)}
+.icon-btn svg{width:18px; height:18px}
+.examples .icon-btn{width:34px; height:34px}
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 18px; border-radius:12px; border:1px solid var(--line); background:var(--surface); font-weight:600}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+.btn.good{background:var(--good); border-color:var(--good); color:#fff}
+.btn.ghost{background:none; border-color:transparent; color:var(--ink-2)}
+.btn:disabled{opacity:.55; cursor:default}
+.row{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px}
+.review{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.review .kanji{font-size:clamp(36px,10vw,52px)}
+.muted{color:var(--ink-2)}
+.small{font-size:14px}
+.feedback{margin-top:12px; padding:10px 14px; border-radius:12px; font-weight:600}
+.feedback.good{background:var(--good-soft); color:var(--good)}
+.feedback.bad{background:var(--bad-soft); color:var(--bad)}
+textarea,input[type=text],input[type=email],input[type=password],input[type=search],select{width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface); outline:none}
+textarea{min-height:90px; resize:vertical; font-family:var(--jp-sans); font-size:18px}
+textarea:focus,input:focus,select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+label.field{display:block; margin-top:12px; font-size:14px; font-weight:600; color:var(--ink-2)}
+label.field > input, label.field > select{margin-top:6px; font-weight:400; color:var(--ink)}
+.toolbar{display:flex; gap:8px; margin-bottom:12px}
+.filters{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap}
+.filters button{border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:6px 12px; font-size:14px; font-weight:600; color:var(--ink-2)}
+.filters button[aria-pressed="true"]{background:var(--ink); color:var(--bg); border-color:var(--ink)}
+.log{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.log-item{background:var(--surface); border:1px solid var(--line); border-radius:14px; overflow:hidden}
+.log-row{width:100%; text-align:left; border:0; background:none; padding:12px 14px; display:grid; grid-template-columns:44px 1fr auto; gap:12px; align-items:center}
+.log-day{font-size:12px; font-weight:700; color:var(--ink-3); text-align:center; line-height:1.2}
+.log-day b{display:block; font-size:17px; color:var(--ink-2)}
+.log-word{font-family:var(--jp-serif); font-weight:700; font-size:22px; line-height:1.2}
+.log-word span{font-family:var(--jp-sans); font-weight:400; font-size:14px; color:var(--ink-2); margin-left:8px}
+.log-en{font-size:14px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dot{width:10px; height:10px; border-radius:50%; background:var(--line)}
+.dot.good{background:var(--good)} .dot.bad{background:var(--bad)}
+.log-detail{padding:0 14px 16px; border-top:1px solid var(--line)}
+.sentences{list-style:none; padding:0; margin:0; display:grid; gap:8px}
+.sentences li{display:flex; gap:8px; align-items:flex-start; padding:10px 12px; border-radius:12px; background:var(--accent-soft)}
+.sentences .jp{flex:1; font-size:17px}
+.sentences time{display:block; font-size:12px; color:var(--ink-3); font-family:var(--sans)}
+.empty{text-align:center; padding:28px 12px; color:var(--ink-2)}
+.empty .big{font-family:var(--jp-serif); font-size:44px; color:var(--accent)}
+.stat-row{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px}
+.stat{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center}
+.stat b{display:block; font-size:24px}
+.stat span{font-size:12px; color:var(--ink-3); font-weight:600; text-transform:uppercase; letter-spacing:.05em}
+.auth{max-width:420px; margin:8vh auto 0}
+.auth .hero{text-align:center; margin-bottom:18px}
+.auth .hero .big{font-family:var(--jp-serif); font-size:64px; color:var(--accent); line-height:1}
+.auth .hero p{color:var(--ink-2); margin:8px 0 0}
+.err{color:var(--bad); font-weight:600; margin-top:10px}
+.msg{color:var(--good); font-weight:600; margin-top:10px}
+.linkish{border:0; background:none; color:var(--accent); padding:0; font-weight:600}
+.toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:12px; font-weight:600; z-index:20; max-width:calc(100% - 32px)}
+.banner{background:var(--accent-soft); color:var(--ink); border-radius:14px; padding:12px 14px; margin-bottom:16px; font-size:15px}
+.setting{display:flex; justify-content:space-between; gap:12px; align-items:center}
+@media (max-width:420px){
+  .tabs button{padding:8px 9px; font-size:14px}
+  .brand .en{display:none}
+  .card{padding:18px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast" hidden></div>
+<script>
+'use strict';
+const APP_VERSION = 'dev';
+const CFG = window.KOTOBA_CONFIG || {};
+const WORDS = window.KOTOBA_WORDS || [];
+const PAGE_URL = location.origin + location.pathname;
+const DEMO = new URLSearchParams(location.search).has('demo');
+// Past words come back for review after these many days.
+const OFFSETS = [1, 3, 7, 14, 30, 60, 120, 240];
+
+let sb = null, user = null, profile = null, reviews = [];
+let setupError = '';
+const ui = {
+  tab: 'today',
+  auth: { mode: 'signin', email: '', password: '', err: '', msg: '', busy: false },
+  rv: { idx: null, phase: 'ask', skipped: [], draft: '', hint: false, result: null, saved: false },
+  log: { q: '', filter: 'all', open: null },
+  push: { busy: false, err: '' }
+};
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const marked = jp => esc(jp).replace(/\{([^}]*)\}/g, '<mark>$1</mark>');
+const plain = jp => jp.replace(/[{}]/g, '');
+// The form the word is usually written in, and its other spelling (if any).
+const show = w => (w.k && !w.kana) ? w.k : w.r;
+const other = w => !w.k ? '' : show(w) === w.k ? w.r : w.k;
+function localDate(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const dayMs = 86400000;
+const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / dayMs);
+const dateOfIndex = i => new Date(Date.parse(profile.start_date + 'T00:00:00Z') + i * dayMs).toISOString().slice(0, 10);
+const fmtDate = (iso, opts = { month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, opts);
+const todayIndex = () => daysBetween(profile.start_date, localDate());
+const unlocked = () => Math.max(0, Math.min(todayIndex() + 1, WORDS.length)); // how many words this person has seen
+const timeZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
+const hourLabel = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+function toast(text) {
+  const t = $('#toast'); t.textContent = text; t.hidden = false;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+const ICON = {
+  speak: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>'
+};
+
+// Read Japanese aloud with the device's built-in voice.
+function speak(text) {
+  if (!('speechSynthesis' in window)) { toast('This browser can’t read aloud.'); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP'; u.rate = 0.9;
+  const v = speechSynthesis.getVoices().find(v => /^ja/i.test(v.lang));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+
+// ---------- practice history ----------
+function recallsFor(i) { return reviews.filter(r => r.word_index === i && r.kind === 'recall'); }
+function sentencesFor(i) { return reviews.filter(r => r.word_index === i && r.kind === 'sentence'); }
+function lastRecall(i) {
+  const list = recallsFor(i);
+  return list.length ? list[list.length - 1].remembered : null;
+}
+function reviewedToday(i) {
+  const today = localDate();
+  return reviews.some(r => r.word_index === i && localDate(new Date(r.created_at)) === today);
+}
+
+// Pick a past word to practice: ones you forgot first, then spaced-out ones, then any other.
+function pickReview(skip = []) {
+  const t = todayIndex(), past = Math.min(t, WORDS.length);
+  if (past <= 0) return null;
+  const ok = i => i >= 0 && i < past && !skip.includes(i) && !reviewedToday(i);
+  const forgotten = [];
+  for (let i = 0; i < past; i++) if (lastRecall(i) === false && ok(i)) forgotten.push(i);
+  if (forgotten.length) return forgotten[0];
+  for (const o of OFFSETS) if (ok(t - o)) return t - o;
+  const rest = [];
+  for (let i = 0; i < past; i++) if (ok(i)) rest.push(i);
+  return rest.length ? rest[Math.floor(Math.random() * rest.length)] : null;
+}
+function resetReview(idx) {
+  ui.rv = { idx, phase: 'ask', skipped: ui.rv.skipped || [], draft: '', hint: false, result: null, saved: false };
+}
+
+// ---------- data: Supabase, or in-memory for ?demo ----------
+const store = DEMO ? {
+  async profile() { return profile; },
+  async createProfile(p) { return p; },
+  async updateProfile(patch) { Object.assign(profile, patch); },
+  async reviews() { return reviews; },
+  async addReview(r) { return { ...r, id: Date.now() + Math.random(), created_at: new Date().toISOString() }; },
+  async deleteReview() {},
+  async saveSubscription() {},
+  async deleteSubscription() {}
+} : {
+  async profile() {
+    const { data, error } = await sb.from('kotoba_profiles').select('*').maybeSingle();
+    if (error) throw error; return data;
+  },
+  async createProfile(p) {
+    const { data, error } = await sb.from('kotoba_profiles').insert(p).select().single();
+    if (error) throw error; return data;
+  },
+  async updateProfile(patch) {
+    const { error } = await sb.from('kotoba_profiles').update(patch).eq('user_id', user.id);
+    if (error) throw error; Object.assign(profile, patch);
+  },
+  async reviews() {
+    const { data, error } = await sb.from('kotoba_reviews').select('*').order('created_at', { ascending: true });
+    if (error) throw error; return data;
+  },
+  async addReview(r) {
+    const { data, error } = await sb.from('kotoba_reviews').insert(r).select().single();
+    if (error) throw error; return data;
+  },
+  async deleteReview(id) {
+    const { error } = await sb.from('kotoba_reviews').delete().eq('id', id);
+    if (error) throw error;
+  },
+  async saveSubscription(sub) {
+    const j = sub.toJSON();
+    const { error } = await sb.from('kotoba_push_subscriptions')
+      .upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_id: user.id }, { onConflict: 'endpoint' });
+    if (error) throw error;
+  },
+  async deleteSubscription(endpoint) {
+    const { error } = await sb.from('kotoba_push_subscriptions').delete().eq('endpoint', endpoint);
+    if (error) throw error;
+  }
+};
+
+function friendlyError(e) {
+  const m = (e && (e.message || e.error_description)) || String(e || '');
+  if (/kotoba_\w+|PGRST205|42P01|does not exist|schema cache/i.test(m + (e && e.code))) {
+    return 'The Kotoba tables aren’t set up yet. Run supabase/schema.sql in the Supabase SQL Editor, then reload.';
+  }
+  if (/invalid login/i.test(m)) return 'That email and password don’t match. Kotoba uses the same account as Prep Kitchen.';
+  if (/email not confirmed/i.test(m)) return 'Confirm your email first: open the link we sent you, then sign in.';
+  if (/fetch|network|load failed/i.test(m)) return navigator.onLine === false ? 'You’re offline. Check your connection and try again.' : 'Can’t reach the server right now. Try again in a minute.';
+  return m || 'Something went wrong. Try again.';
+}
+
+async function loadAll() {
+  setupError = '';
+  try {
+    profile = await store.profile();
+    const tz = timeZone();
+    if (!profile) profile = await store.createProfile({ start_date: localDate(), timezone: tz, notify_hour: 8 });
+    else if (profile.timezone !== tz) await store.updateProfile({ timezone: tz });
+    reviews = await store.reviews();
+  } catch (e) {
+    setupError = friendlyError(e);
+  }
+  resetReview(profile ? pickReview() : null);
+  render();
+}
+
+// ---------- rendering ----------
+function render() {
+  const app = $('#app');
+  if (!user) { app.innerHTML = authView(); return; }
+  const tabs = [['today', 'Today'], ['log', 'Log'], ['settings', 'Settings']];
+  app.innerHTML = `
+    <header class="top"><div class="wrap">
+      <div class="brand"><span class="jp" lang="ja">言葉</span><span class="en">Kotoba</span></div>
+      <nav class="tabs" aria-label="Sections">
+        ${tabs.map(([k, l]) => `<button data-action="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ''}>${l}</button>`).join('')}
+      </nav>
+    </div></header>
+    <main class="wrap">
+      ${DEMO ? `<div class="banner">Preview mode: sample progress, nothing is saved. <a href="${esc(PAGE_URL)}">Sign in</a> to start your own list.</div>` : ''}
+      ${setupError ? `<div class="card"><h2>Almost there</h2><p class="muted">${esc(setupError)}</p><button class="btn" data-action="reload">Try again</button></div>`
+        : !profile ? `<div class="empty">Loading…</div>`
+        : ui.tab === 'today' ? todayView() : ui.tab === 'log' ? logView() : settingsView()}
+    </main>`;
+}
+
+function wordForms(w) {
+  return `<div class="forms">
+      <span class="lbl">Kanji</span><span class="kanji" lang="ja">${esc(w.k || '—')}</span>
+      <span class="lbl">Hiragana</span><span class="kana" lang="ja">${esc(w.r)}</span>
+    </div>`;
+}
+function wordChips(w) {
+  const chips = [`<span class="chip">${esc(w.pos)}</span>`];
+  if (!w.k) chips.push('<span class="chip">No kanji · written in hiragana</span>');
+  else if (w.kana) chips.push('<span class="chip">Usually written in hiragana</span>');
+  return `<div class="chips">${chips.join('')}</div>`;
+}
+function examplesList(w) {
+  return `<ol class="examples">${w.ex.map(([jp, en]) => `
+      <li><div class="text"><p class="jp" lang="ja">${marked(jp)}</p><p class="en">${esc(en)}</p></div>
+      <button class="icon-btn" data-action="speak" data-text="${esc(plain(jp))}" aria-label="Read this sentence aloud">${ICON.speak}</button></li>`).join('')}
+    </ol>`;
+}
+function wordCard(w, eyebrow) {
+  return `<section class="card">
+      <div class="eyebrow">${eyebrow}</div>
+      <div class="word-head">${wordForms(w)}
+        <button class="icon-btn" data-action="speak" data-text="${esc(w.r)}" aria-label="Say ${esc(w.r)} aloud">${ICON.speak}</button>
+      </div>
+      <p class="meaning">${esc(w.en)}</p>
+      ${wordChips(w)}
+      ${w.note ? `<p class="note">${esc(w.note)}</p>` : ''}
+      <h3>Example sentences</h3>
+      ${examplesList(w)}
+    </section>`;
+}
+
+function todayView() {
+  const t = todayIndex();
+  const today = localDate();
+  let main;
+  if (t < WORDS.length) {
+    main = wordCard(WORDS[t], `Day ${t + 1} · ${fmtDate(today, { weekday: 'long', month: 'long', day: 'numeric' })}`);
+  } else {
+    main = `<section class="card empty"><div class="big" lang="ja">おめでとう</div>
+      <p><b>You’ve learned all ${WORDS.length} words.</b> New words are on the way. Keep practicing the ones below in the meantime.</p></section>`;
+  }
+  return main + reviewCard();
+}
+
+function reviewCard() {
+  const rv = ui.rv;
+  if (todayIndex() <= 0) {
+    return `<section class="card review"><div class="eyebrow">Practice</div>
+      <p class="muted" style="margin:8px 0 0">Starting tomorrow, you’ll get a past word to remember or use in a sentence here.</p></section>`;
+  }
+  if (rv.idx == null) {
+    return `<section class="card review"><div class="eyebrow">Practice</div>
+      <p style="margin:8px 0 0"><b>All caught up for today.</b> <span class="muted">You’ve practiced every past word that was due. Come back tomorrow.</span></p></section>`;
+  }
+  const w = WORDS[rv.idx];
+  const from = `From day ${rv.idx + 1} · ${fmtDate(dateOfIndex(rv.idx))}`;
+  const head = `<div class="eyebrow">Practice · ${from}</div>
+    <p style="margin:8px 0 10px"><b>Do you remember what this means?</b></p>
+    <div class="word-head">${wordForms(w)}
+      <button class="icon-btn" data-action="speak" data-text="${esc(w.r)}" aria-label="Say ${esc(w.r)} aloud">${ICON.speak}</button></div>`;
+  let body = '';
+  if (rv.phase === 'ask') {
+    body = `<div class="row">
+        <button class="btn primary" data-action="rv-reveal">Show meaning</button>
+        <button class="btn" data-action="rv-write">Try using it</button>
+        <button class="btn ghost" data-action="rv-next">Another word</button>
+      </div>`;
+  } else if (rv.phase === 'shown') {
+    body = `<p class="meaning">${esc(w.en)}</p>
+      <p class="muted small" style="margin:0">Did you remember it?</p>
+      <div class="row">
+        <button class="btn good" data-action="rv-answer" data-ok="1">Yes, I knew it</button>
+        <button class="btn" data-action="rv-answer" data-ok="0">No, I forgot</button>
+      </div>`;
+  } else if (rv.phase === 'answered') {
+    body = `<p class="meaning">${esc(w.en)}</p>
+      <div class="feedback ${rv.result ? 'good' : 'bad'}">${rv.result ? 'Nice! It’ll come back again in a while.' : 'No problem. It’ll come back for practice soon.'}</div>
+      <p style="margin:14px 0 0"><b>Want to try using ${esc(show(w))} in a sentence?</b></p>
+      <div class="row">
+        <button class="btn primary" data-action="rv-write">Write a sentence</button>
+        <button class="btn" data-action="rv-next">Next word</button>
+      </div>`;
+  } else if (rv.phase === 'write') {
+    const ex = w.ex[0];
+    body = `<p class="muted small" style="margin:12px 0 6px">Write your own Japanese sentence using <b lang="ja">${esc(show(w))}</b>${other(w) ? ` (<span lang="ja">${esc(other(w))}</span>)` : ''}. It’s saved to your log.</p>
+      <textarea id="rv-draft" lang="ja" maxlength="500" placeholder="例：${esc(plain(ex[0]))}">${esc(rv.draft)}</textarea>
+      ${rv.hint ? `<div class="note"><span lang="ja">${marked(ex[0])}</span><br>${esc(ex[1])}<br><span class="small">Meaning: ${esc(w.en)}</span></div>` : ''}
+      <div class="row">
+        <button class="btn primary" data-action="rv-save">Save sentence</button>
+        ${rv.hint ? '' : '<button class="btn" data-action="rv-hint">Show a hint</button>'}
+        <button class="btn ghost" data-action="rv-next">Skip</button>
+      </div>`;
+  } else if (rv.phase === 'saved') {
+    const mine = sentencesFor(rv.idx);
+    body = `<div class="feedback good">Saved to your log.</div>
+      <p class="jp" lang="ja" style="font-size:18px; margin:12px 0 0">${esc(mine.length ? mine[mine.length - 1].sentence : '')}</p>
+      <p class="muted small" style="margin:6px 0 0">Compare with an example: <span lang="ja">${marked(w.ex[1][0])}</span> — ${esc(w.ex[1][1])}</p>
+      <div class="row">
+        ${rv.result == null ? '<button class="btn" data-action="rv-reveal">Check the meaning</button>' : ''}
+        <button class="btn primary" data-action="rv-next">Next word</button>
+      </div>`;
+  }
+  return `<section class="card review" id="review">${head}${body}</section>`;
+}
+
+function logView() {
+  const n = unlocked();
+  if (!n) return `<div class="empty">Your first word arrives today.</div>`;
+  const q = ui.log.q.trim().toLowerCase();
+  const items = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const w = WORDS[i];
+    if (q && ![w.k, w.r, w.en, w.pos].some(s => s && s.toLowerCase().includes(q))) continue;
+    const last = lastRecall(i);
+    if (ui.log.filter === 'practice' && last !== false) continue;
+    if (ui.log.filter === 'sentences' && !sentencesFor(i).length) continue;
+    items.push(i);
+  }
+  const remembered = Array.from({ length: n }, (_, i) => lastRecall(i)).filter(x => x === true).length;
+  const written = reviews.filter(r => r.kind === 'sentence').length;
+  const filters = [['all', 'All'], ['practice', 'Needs practice'], ['sentences', 'My sentences']];
+  return `
+    <div class="stat-row">
+      <div class="stat"><b>${n}</b><span>Words seen</span></div>
+      <div class="stat"><b>${remembered}</b><span>Remembered</span></div>
+      <div class="stat"><b>${written}</b><span>Sentences</span></div>
+    </div>
+    <div class="toolbar"><input type="search" id="log-q" placeholder="Search kanji, hiragana or English" value="${esc(ui.log.q)}" aria-label="Search your words"></div>
+    <div class="filters">${filters.map(([k, l]) => `<button data-action="filter" data-filter="${k}" aria-pressed="${ui.log.filter === k}">${l}</button>`).join('')}</div>
+    ${items.length ? `<ul class="log">${items.map(logItem).join('')}</ul>` : `<div class="empty">No words match.</div>`}`;
+}
+
+function logItem(i) {
+  const w = WORDS[i], last = lastRecall(i), open = ui.log.open === i;
+  const dot = last === true ? 'good' : last === false ? 'bad' : '';
+  const dotLabel = last === true ? 'Remembered last time' : last === false ? 'Forgot last time' : 'Not practiced yet';
+  let detail = '';
+  if (open) {
+    const recalls = recallsFor(i), mine = sentencesFor(i);
+    const yes = recalls.filter(r => r.remembered).length, no = recalls.length - yes;
+    detail = `<div class="log-detail">
+        <div class="word-head" style="margin-top:14px">${wordForms(w)}
+          <button class="icon-btn" data-action="speak" data-text="${esc(w.r)}" aria-label="Say ${esc(w.r)} aloud">${ICON.speak}</button></div>
+        <p class="meaning">${esc(w.en)}</p>
+        ${wordChips(w)}
+        ${w.note ? `<p class="note">${esc(w.note)}</p>` : ''}
+        <h3>Example sentences</h3>${examplesList(w)}
+        <h3>Your practice</h3>
+        <div class="chips">
+          ${recalls.length ? `<span class="chip good">Remembered ${yes}×</span><span class="chip bad">Forgot ${no}×</span>` : '<span class="chip">Not practiced yet</span>'}
+        </div>
+        ${mine.length ? `<h3>Your sentences</h3><ul class="sentences">${mine.map(s => `
+          <li><div class="jp" lang="ja">${esc(s.sentence)}<time>${fmtDate(localDate(new Date(s.created_at)), { month: 'short', day: 'numeric', year: 'numeric' })}</time></div>
+          <button class="icon-btn" data-action="del-sentence" data-id="${esc(s.id)}" aria-label="Delete this sentence">${ICON.trash}</button></li>`).join('')}</ul>` : ''}
+        <div class="row"><button class="btn primary" data-action="practice" data-idx="${i}">Practice this word</button></div>
+      </div>`;
+  }
+  return `<li class="log-item">
+      <button class="log-row" data-action="toggle-log" data-idx="${i}" aria-expanded="${open}">
+        <span class="log-day">Day<b>${i + 1}</b></span>
+        <span style="min-width:0"><span class="log-word" lang="ja">${esc(show(w))}${other(w) ? `<span>${esc(other(w))}</span>` : ''}</span><span class="log-en" style="display:block">${esc(w.en)}</span></span>
+        <span class="dot ${dot}" title="${dotLabel}" aria-label="${dotLabel}"></span>
+      </button>${detail}</li>`;
+}
+
+function settingsView() {
+  const p = pushState();
+  const hours = Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${profile.notify_hour === h ? 'selected' : ''}>${hourLabel(h)}</option>`).join('');
+  const lastDate = dateOfIndex(WORDS.length - 1);
+  return `
+    <section class="card">
+      <h2>Daily notification</h2>
+      <p class="muted small" style="margin:0 0 6px">Get each new word, plus a past word to check, at the time you choose.</p>
+      ${p.note ? `<div class="banner small" style="margin:12px 0 0">${p.note}</div>` : ''}
+      <div class="row">
+        ${p.supported ? (p.on
+          ? '<button class="btn" data-action="push-off" ' + (ui.push.busy ? 'disabled' : '') + '>Turn off on this device</button><button class="btn ghost" data-action="push-test">Preview a notification</button>'
+          : '<button class="btn primary" data-action="push-on" ' + (ui.push.busy || p.blocked ? 'disabled' : '') + '>Turn on notifications</button>') : ''}
+      </div>
+      ${ui.push.err ? `<p class="err">${esc(ui.push.err)}</p>` : ''}
+      <label class="field">Send it at
+        <select id="notify-hour">${hours}</select>
+      </label>
+      <p class="muted small" style="margin:8px 0 0">Time zone: ${esc(profile.timezone)}. Notifications can arrive up to an hour after this time.</p>
+    </section>
+    <section class="card">
+      <h2>Your word list</h2>
+      <p class="muted small" style="margin:0">You started on ${fmtDate(profile.start_date, { month: 'long', day: 'numeric', year: 'numeric' })}. You’re on day ${todayIndex() + 1}. The list has ${WORDS.length} native Japanese words and never repeats one; it runs through ${fmtDate(lastDate, { month: 'long', day: 'numeric', year: 'numeric' })}.</p>
+    </section>
+    <section class="card">
+      <h2>Account</h2>
+      <p class="muted small" style="margin:0 0 6px">${DEMO ? 'Preview mode' : `Signed in as ${esc(user.email || '')}. This is the same account you use for Prep Kitchen.`}</p>
+      <div class="row">${DEMO ? `<a class="btn" href="${esc(PAGE_URL)}">Leave preview</a>` : '<button class="btn" data-action="signout">Sign out</button>'}</div>
+    </section>
+    <p class="muted small" style="text-align:center">Kotoba · version ${esc(APP_VERSION)}</p>`;
+}
+
+// ---------- notifications ----------
+let pushSub = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function pushState() {
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  if (DEMO) return { supported: false, note: 'Notifications are off in preview mode.' };
+  if (!supported) {
+    if (isIOS && !standalone) return { supported: false, note: 'On iPhone, first add Kotoba to your Home Screen: tap the Share button, then <b>Add to Home Screen</b>. Open it from there to turn on notifications.' };
+    return { supported: false, note: 'This browser can’t receive notifications. Try Chrome, Edge, Firefox or Safari.' };
+  }
+  const blocked = Notification.permission === 'denied';
+  return {
+    supported: true, on: !!pushSub && Notification.permission === 'granted', blocked,
+    note: blocked ? 'Notifications are blocked for this site. Allow them in your browser’s site settings, then reload.' : ''
+  };
+}
+function b64ToBytes(b64) {
+  const s = atob((b64 + '==='.slice((b64.length + 3) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(s, c => c.charCodeAt(0));
+}
+async function swReady() { return navigator.serviceWorker.ready; }
+async function refreshPushSub() {
+  if (DEMO || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    pushSub = reg ? await reg.pushManager.getSubscription() : null;
+    // Keep the server copy current in case it was removed.
+    if (pushSub && user && Notification.permission === 'granted') await store.saveSubscription(pushSub);
+  } catch { /* ignore */ }
+}
+async function pushOn() {
+  ui.push = { busy: true, err: '' }; render();
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error('Notifications weren’t allowed.');
+    const reg = await swReady();
+    pushSub = await reg.pushManager.getSubscription() ||
+      await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(CFG.vapidPublicKey) });
+    await store.saveSubscription(pushSub);
+    toast(`You’ll get your word at ${hourLabel(profile.notify_hour)}.`);
+  } catch (e) { ui.push.err = friendlyError(e); }
+  ui.push.busy = false; render();
+}
+async function pushOff() {
+  ui.push = { busy: true, err: '' }; render();
+  try {
+    if (pushSub) { const ep = pushSub.endpoint; await pushSub.unsubscribe(); await store.deleteSubscription(ep); }
+    pushSub = null; toast('Notifications are off on this device.');
+  } catch (e) { ui.push.err = friendlyError(e); }
+  ui.push.busy = false; render();
+}
+async function pushTest() {
+  const t = Math.min(todayIndex(), WORDS.length - 1), w = WORDS[t];
+  const reg = await swReady();
+  reg.showNotification(`今日の言葉 · ${show(w)}`, { body: (other(w) ? `${other(w)} — ` : '') + w.en, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: 'kotoba-preview' });
+}
+
+// ---------- auth ----------
+function authView() {
+  const a = ui.auth;
+  const titles = { signin: 'Sign in', signup: 'Create an account', forgot: 'Reset your password', reset: 'Choose a new password' };
+  return `<main class="wrap"><div class="auth">
+    <div class="hero"><div class="big" lang="ja">言葉</div><h1 style="margin:10px 0 0; font-size:24px">Kotoba</h1>
+      <p>A native Japanese word every day, with kanji, hiragana, meaning and example sentences.</p></div>
+    <form class="card" id="auth-form" novalidate>
+      <h2>${titles[a.mode]}</h2>
+      ${a.mode === 'signin' ? '<p class="muted small" style="margin:0">Already use Prep Kitchen? Sign in with the same account.</p>' : ''}
+      ${a.mode !== 'reset' ? `<label class="field">Email<input type="email" id="auth-email" autocomplete="email" value="${esc(a.email)}" required></label>` : ''}
+      ${a.mode !== 'forgot' ? `<label class="field">Password<input type="password" id="auth-password" autocomplete="${a.mode === 'signin' ? 'current-password' : 'new-password'}" required></label>` : ''}
+      ${a.err ? `<p class="err">${esc(a.err)}</p>` : ''}${a.msg ? `<p class="msg">${esc(a.msg)}</p>` : ''}
+      <div class="row"><button class="btn primary" type="submit" ${a.busy ? 'disabled' : ''} style="flex:1">${a.busy ? 'One moment…' : titles[a.mode]}</button></div>
+      <p class="small" style="margin:14px 0 0; display:flex; gap:14px; flex-wrap:wrap">
+        ${a.mode === 'signin' ? '<button type="button" class="linkish" data-action="auth-mode" data-mode="signup">Create an account</button><button type="button" class="linkish" data-action="auth-mode" data-mode="forgot">Forgot password?</button>'
+          : a.mode !== 'reset' ? '<button type="button" class="linkish" data-action="auth-mode" data-mode="signin">Back to sign in</button>' : ''}
+        <a href="?demo">Look around first</a>
+      </p>
+    </form></div></main>`;
+}
+async function submitAuth() {
+  const a = ui.auth;
+  a.err = ''; a.msg = '';
+  const emailEl = $('#auth-email'), passEl = $('#auth-password');
+  if (emailEl) a.email = emailEl.value.trim();
+  const email = a.email, password = passEl ? passEl.value : '';
+  if (!sb) { a.err = 'Can’t reach the server right now. Try again in a minute.'; render(); return; }
+  if (a.mode !== 'reset' && !/^\S+@\S+\.\S+$/.test(email)) { a.err = 'Enter a valid email address.'; render(); return; }
+  if (a.mode !== 'forgot' && password.length < 6) { a.err = 'Use a password with at least 6 characters.'; render(); return; }
+  a.busy = true; render();
+  try {
+    if (a.mode === 'signin') {
+      const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error;
+    } else if (a.mode === 'signup') {
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: PAGE_URL } }); if (error) throw error;
+      if (!data.session) { a.mode = 'signin'; a.msg = 'Account created. Check your email for a confirmation link, then sign in here.'; }
+    } else if (a.mode === 'forgot') {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: PAGE_URL }); if (error) throw error;
+      a.msg = 'If that email has an account, a reset link is on its way.';
+    } else if (a.mode === 'reset') {
+      const { error } = await sb.auth.updateUser({ password }); if (error) throw error;
+      a.mode = 'signin'; toast('Password updated.');
+      const { data } = await sb.auth.getSession();
+      if (data.session) { a.busy = false; await onSignedIn(data.session); return; }
+    }
+  } catch (e) { a.err = friendlyError(e); }
+  a.busy = false;
+  if (!user) render();
+}
+async function onSignedIn(session) {
+  if (user && user.id === session.user.id && profile) return;
+  user = session.user; profile = null; render();
+  await loadAll();
+  await refreshPushSub(); render();
+}
+function onSignedOut() { user = null; profile = null; reviews = []; pushSub = null; render(); }
+
+// ---------- events ----------
+document.addEventListener('click', async e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const act = el.dataset.action, rv = ui.rv;
+  switch (act) {
+    case 'tab': ui.tab = el.dataset.tab; render(); scrollTo(0, 0); break;
+    case 'speak': speak(el.dataset.text); break;
+    case 'reload': await loadAll(); break;
+    case 'auth-mode': ui.auth.mode = el.dataset.mode; ui.auth.err = ''; ui.auth.msg = ''; render(); break;
+    case 'signout': await sb.auth.signOut(); break;
+    case 'rv-reveal': rv.phase = 'shown'; render(); break;
+    case 'rv-answer': {
+      const ok = el.dataset.ok === '1';
+      rv.result = ok; rv.phase = 'answered'; render();
+      try { reviews.push(await store.addReview({ word_index: rv.idx, kind: 'recall', remembered: ok })); }
+      catch (err) { toast(friendlyError(err)); }
+      break;
+    }
+    case 'rv-write': rv.phase = 'write'; render(); setTimeout(() => { const t = $('#rv-draft'); if (t) t.focus(); }, 0); break;
+    case 'rv-hint': rv.draft = ($('#rv-draft') || {}).value || ''; rv.hint = true; render(); break;
+    case 'rv-save': {
+      const text = (($('#rv-draft') || {}).value || '').trim();
+      if (!text) { toast('Write a sentence first.'); break; }
+      el.disabled = true;
+      try {
+        reviews.push(await store.addReview({ word_index: rv.idx, kind: 'sentence', sentence: text }));
+        rv.phase = 'saved'; rv.draft = '';
+      } catch (err) { rv.draft = text; toast(friendlyError(err)); }
+      render(); break;
+    }
+    case 'rv-next': {
+      rv.skipped = [...rv.skipped, rv.idx];
+      resetReview(pickReview(ui.rv.skipped)); render(); break;
+    }
+    case 'practice': ui.tab = 'today'; resetReview(+el.dataset.idx); render(); setTimeout(() => $('#review') && $('#review').scrollIntoView({ behavior: 'smooth', block: 'start' }), 0); break;
+    case 'filter': ui.log.filter = el.dataset.filter; render(); break;
+    case 'toggle-log': { const i = +el.dataset.idx; ui.log.open = ui.log.open === i ? null : i; render(); break; }
+    case 'del-sentence': {
+      if (!confirm('Delete this sentence from your log?')) break;
+      const id = el.dataset.id;
+      try { await store.deleteReview(id); reviews = reviews.filter(r => String(r.id) !== String(id)); render(); }
+      catch (err) { toast(friendlyError(err)); }
+      break;
+    }
+    case 'push-on': pushOn(); break;
+    case 'push-off': pushOff(); break;
+    case 'push-test': pushTest(); break;
+  }
+});
+document.addEventListener('submit', e => { if (e.target.id === 'auth-form') { e.preventDefault(); submitAuth(); } });
+document.addEventListener('input', e => {
+  if (e.target.id === 'log-q') {
+    ui.log.q = e.target.value; const pos = e.target.selectionStart;
+    render(); const q = $('#log-q'); q.focus(); q.setSelectionRange(pos, pos);
+  }
+  if (e.target.id === 'rv-draft') ui.rv.draft = e.target.value;
+});
+document.addEventListener('change', async e => {
+  if (e.target.id === 'notify-hour') {
+    const h = +e.target.value;
+    try { await store.updateProfile({ notify_hour: h }); toast(`Daily word at ${hourLabel(h)}.`); }
+    catch (err) { toast(friendlyError(err)); }
+  }
+});
+// A new day may have started while the app sat open.
+let shownDay = null;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && profile && shownDay !== localDate()) { shownDay = localDate(); resetReview(pickReview()); render(); }
+});
+
+// ---------- start ----------
+function demoSetup() {
+  user = { id: 'demo', email: '' };
+  const start = new Date(); start.setDate(start.getDate() - 21);
+  profile = { start_date: localDate(start), timezone: timeZone(), notify_hour: 8 };
+  const at = d => new Date(Date.now() - d * dayMs).toISOString();
+  reviews = [
+    { id: 1, word_index: 4, kind: 'recall', remembered: true, created_at: at(10) },
+    { id: 2, word_index: 4, kind: 'sentence', sentence: '昔の写真を見ると、懐かしい気持ちになる。', created_at: at(10) },
+    { id: 3, word_index: 11, kind: 'recall', remembered: false, created_at: at(3) },
+    { id: 4, word_index: 0, kind: 'recall', remembered: true, created_at: at(6) }
+  ];
+  shownDay = localDate();
+  resetReview(pickReview()); render();
+}
+
+async function init() {
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  if (DEMO) { demoSetup(); return; }
+  if (CFG.supabaseUrl && CFG.supabaseKey && window.supabase) {
+    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  }
+  render();
+  if (!sb) return;
+  sb.auth.onAuthStateChange((event, session) => {
+    setTimeout(() => {
+      if (event === 'PASSWORD_RECOVERY') { ui.auth.mode = 'reset'; user = null; render(); return; }
+      if (ui.auth.mode === 'reset' && event !== 'SIGNED_OUT') return;
+      if (session && session.user) { shownDay = localDate(); onSignedIn(session); }
+      else onSignedOut();
+    }, 0);
+  });
+}
+init();
+</script>
+</body>
+</html>

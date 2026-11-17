@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Sends Kotoba's daily push notifications. Run by .github/workflows/send-words.yml.",
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

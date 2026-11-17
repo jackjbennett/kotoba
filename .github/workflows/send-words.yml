@@ -1,0 +1,37 @@
+# Sends each person their Japanese word of the day at the hour they picked.
+# Runs every hour; supabase/schema.sql decides who is due, so a late or skipped run still delivers.
+# Also counts as Supabase activity, so the shared project doesn't get paused.
+name: Send daily words
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install web-push
+        working-directory: push
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Send notifications
+        run: node push/send.mjs
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          KOTOBA_PUSH_TOKEN: ${{ secrets.KOTOBA_PUSH_TOKEN }}
+      # GitHub turns off scheduled workflows after 60 days without commits. This keeps it on.
+      - name: Keep this schedule enabled
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/send-words.yml/enable" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
