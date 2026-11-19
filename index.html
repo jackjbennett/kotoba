@@ -62,6 +62,7 @@ main{padding:20px 0 calc(48px + env(safe-area-inset-bottom))}
 .forms .lbl{font-size:12px; font-weight:600; color:var(--ink-3); text-transform:uppercase; letter-spacing:.05em}
 .kanji{font-family:var(--jp-serif); font-weight:700; font-size:clamp(44px,13vw,68px); line-height:1.15; color:var(--ink); word-break:keep-all}
 .kana{font-family:var(--jp-sans); font-size:22px; color:var(--ink-2)}
+.sounds{font-size:18px; font-weight:600; color:var(--ink-2); letter-spacing:.01em}
 .meaning{font-size:21px; font-weight:600; margin:14px 0 8px; line-height:1.35}
 .chips{display:flex; flex-wrap:wrap; gap:6px}
 .chip{font-size:13px; padding:3px 10px; border-radius:999px; background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line)}
@@ -78,7 +79,7 @@ h3{font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:upperca
 mark{background:var(--mark); color:inherit; border-radius:4px; padding:0 2px}
 .icon-btn{flex:none; width:40px; height:40px; border-radius:50%; border:1px solid var(--line); background:var(--surface); display:grid; place-items:center; color:var(--ink-2)}
 .icon-btn:hover{color:var(--accent); border-color:var(--accent)}
-.icon-btn svg{width:18px; height:18px}
+.icon-btn svg, .btn svg{width:18px; height:18px}
 .examples .icon-btn{width:34px; height:34px}
 .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 18px; border-radius:12px; border:1px solid var(--line); background:var(--surface); font-weight:600}
 .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
@@ -193,15 +194,77 @@ const ICON = {
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>'
 };
 
-// Read Japanese aloud with the device's built-in voice.
-function speak(text) {
-  if (!('speechSynthesis' in window)) { toast('This browser can’t read aloud.'); return; }
-  speechSynthesis.cancel();
+// ---------- read aloud ----------
+// Uses the device's own Japanese voices. Devices often have several, from robotic to very natural,
+// so rank them and use the most natural one unless the person picked another in Settings.
+// The choice is stored per device, because every device has different voices.
+const tts = 'speechSynthesis' in window ? window.speechSynthesis : null;
+const RATES = [['0.75', 'Slow'], ['0.9', 'A little slow'], ['1', 'Normal']];
+const pref = {
+  get(k, d) { try { return localStorage.getItem('kotoba-' + k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('kotoba-' + k, v); } catch { /* private mode */ } }
+};
+let jaVoices = [];
+function voiceTier(v) {
+  const id = `${v.name} ${v.voiceURI}`;
+  if (/natural|neural/i.test(id)) return 4;                         // Edge: Microsoft Nanami / Keita Online (Natural)
+  if (/premium|enhanced|siri/i.test(id)) return 3;                  // Apple: downloadable Kyoko / Otoya
+  if (/google|network/i.test(id) || !v.localService) return 2;      // Chrome: Google 日本語; Android network voices
+  if (/eloquence|compact|desktop|haruka|ayumi|ichiro|sayaka/i.test(id)) return 0; // old built-in voices
+  return 1;
+}
+// Within a tier, the clearest-sounding voices first.
+const voiceRank = v => voiceTier(v) + (/nanami|kyoko/i.test(v.name) ? 0.5 : 0);
+const voiceLabel = v => v.name.replace(/\s*[-–]\s*Japanese \(Japan\)$/i, '').replace(/^Microsoft /, '');
+function loadVoices() {
+  if (!tts) return false;
+  const before = jaVoices.map(v => v.voiceURI).join('|');
+  jaVoices = tts.getVoices()
+    .filter(v => /^ja([-_]|$)/i.test(v.lang))
+    .sort((a, b) => voiceRank(b) - voiceRank(a) || a.name.localeCompare(b.name));
+  return jaVoices.map(v => v.voiceURI).join('|') !== before;
+}
+// Chrome and Edge load their voice list late, and Edge adds its online voices a moment after.
+if (tts) {
+  loadVoices();
+  tts.addEventListener('voiceschanged', () => { if (loadVoices() && ui.tab === 'settings' && profile) render(); });
+}
+function currentVoice() {
+  const uri = pref.get('voice', '');
+  return (uri && jaVoices.find(v => v.voiceURI === uri)) || jaVoices[0] || null;
+}
+function say(text, voice, fallback) {
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ja-JP'; u.rate = 0.9;
-  const v = speechSynthesis.getVoices().find(v => /^ja/i.test(v.lang));
-  if (v) u.voice = v;
-  speechSynthesis.speak(u);
+  u.lang = voice ? voice.lang : 'ja-JP';
+  if (voice) u.voice = voice;
+  u.rate = +pref.get('rate', '0.9'); u.pitch = 1;
+  // Online voices fail without a connection; fall back to one stored on the device.
+  u.onerror = e => {
+    if (!fallback || /interrupted|canceled/.test(e.error)) return;
+    const local = jaVoices.find(v => v.localService && v !== voice);
+    if (local) say(text, local, false);
+  };
+  tts.speak(u);
+}
+function speak(text) {
+  if (!tts) { toast('This browser can’t read aloud.'); return; }
+  if (!jaVoices.length) loadVoices();
+  tts.cancel();
+  const v = currentVoice();
+  say(text, v, !!v && !v.localService);
+}
+
+// What to install for a more natural voice, when the device only has basic ones.
+function voiceTip() {
+  const best = jaVoices[0] ? voiceTier(jaVoices[0]) : -1;
+  if (best >= 3) return '';
+  const ua = navigator.userAgent;
+  if (isIOS) return 'For a much more natural voice, download one: Settings → Accessibility → Spoken Content → Voices → Japanese → Kyoko or Otoya (Enhanced or Premium). Then reopen Kotoba.';
+  if (/Macintosh/.test(ua)) return 'For a much more natural voice, download one: System Settings → Accessibility → Spoken Content → System voice → Manage Voices → Japanese → Kyoko or Otoya (Premium). Then reopen Kotoba.';
+  if (/Android/.test(ua)) return best < 2 ? 'For a more natural voice: Android Settings → Text-to-speech output → Google → Install voice data → Japanese.' : '';
+  if (/Windows/.test(ua) && !/Edg\//.test(ua)) return 'Microsoft Edge has natural-sounding Japanese voices (Nanami and Keita). Open Kotoba in Edge to use them.';
+  if (/Edg\//.test(ua)) return 'Edge’s natural voices (Nanami, Keita) need an internet connection. Connect and reload to use them.';
+  return best < 0 ? 'This device has no Japanese voice. Add one in your system’s speech or text-to-speech settings.' : '';
 }
 
 // ---------- practice history ----------
@@ -326,10 +389,56 @@ function render() {
     </main>`;
 }
 
+// English-style respelling of a hiragana reading, e.g. こもれび → koh-moh-reh-bee.
+// Each beat of the word is one hyphenated part; long vowels are folded in (ちょうど → choh-doh).
+const KANA_ROMAJI = Object.fromEntries(('あa いi うu えe おo かka きki くku けke こko さsa しshi すsu せse そso たta ちchi つtsu てte とto ' +
+  'なna にni ぬnu ねne のno はha ひhi ふfu へhe ほho まma みmi むmu めme もmo やya ゆyu よyo らra りri るru れre ろro わwa をo んn ' +
+  'がga ぎgi ぐgu げge ごgo ざza じji ずzu ぜze ぞzo だda ぢji づzu でde どdo ばba びbi ぶbu べbe ぼbo ぱpa ぴpi ぷpu ぺpe ぽpo')
+  .split(' ').map(p => [p[0], p.slice(1)]));
+const SMALL_Y = { 'ゃ': 'a', 'ゅ': 'u', 'ょ': 'o' };
+const SOUND = { a: 'ah', i: 'ee', u: 'oo', e: 'eh', o: 'oh', ei: 'ay' };
+function respell(kana, pos = '') {
+  // Katakana → hiragana, then split into beats (romaji), with っ and ー kept as markers.
+  const chars = [...kana.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))];
+  const beats = [];
+  for (const c of chars) {
+    if (SMALL_Y[c] && beats.length && /i$/.test(beats[beats.length - 1])) {
+      const b = beats.pop().replace(/i$/, '');
+      beats.push((/^(sh|ch|j)$/.test(b) ? b : b + 'y') + SMALL_Y[c]);
+    } else if (c === 'っ' || c === 'ー') beats.push(c);
+    else if (KANA_ROMAJI[c]) beats.push(KANA_ROMAJI[c]);
+    else return ''; // not plain kana: show nothing rather than something wrong
+  }
+  const out = [];
+  let hold = false; // っ: double the next consonant
+  beats.forEach((b, i) => {
+    const prev = out.length ? out[out.length - 1] : null;
+    const last = i === beats.length - 1;
+    if (b === 'っ') { hold = true; return; }
+    if (b === 'ー') return;
+    if (b === 'n') { if (prev) prev.tail += 'n'; else out.push({ c: 'n', v: '', tail: '' }); return; }
+    const m = b.match(/^([^aiueo]*)([aiueo])$/);
+    // Long vowels: おう / おお → oh, えい → ay, and doubled a / i / u. A verb's final う is said, not folded.
+    if (prev && !prev.tail && !m[1] && !hold) {
+      const pv = prev.v;
+      if ((pv === 'o' && (b === 'o' || (b === 'u' && !(last && /^verb/.test(pos))))) || (pv === b && pv !== 'e')) return;
+      if (pv === 'e' && b === 'i') { prev.v = 'ei'; return; }
+    }
+    if (hold && prev) prev.tail += m[1].startsWith('ch') ? 't' : m[1][0] || '';
+    hold = false;
+    // A final す is whispered: いただきます → ee-tah-dah-kee-mahss.
+    if (last && b === 'su' && prev && !prev.tail) { prev.tail = 'ss'; return; }
+    out.push({ c: m[1], v: m[2], tail: '' });
+  });
+  return out.map(s => (s.c === 'g' && s.v === 'i' ? 'gh' : s.c) + (SOUND[s.v] || '') + s.tail).join('-');
+}
+
 function wordForms(w) {
+  const sounds = respell(w.r, w.pos);
   return `<div class="forms">
       <span class="lbl">Kanji</span><span class="kanji" lang="ja">${esc(w.k || '—')}</span>
       <span class="lbl">Hiragana</span><span class="kana" lang="ja">${esc(w.r)}</span>
+      ${sounds ? `<span class="lbl">Sounds like</span><span class="sounds">${esc(sounds)}</span>` : ''}
     </div>`;
 }
 function wordChips(w) {
@@ -512,6 +621,7 @@ function settingsView() {
       </label>
       <p class="muted small" style="margin:8px 0 0">Time zone: ${esc(profile.timezone)}. Notifications can arrive up to an hour after this time.</p>
     </section>
+    ${voiceCard()}
     <section class="card">
       <h2>Your word list</h2>
       <p class="muted small" style="margin:0">You started on ${fmtDate(profile.start_date, { month: 'long', day: 'numeric', year: 'numeric' })}. You’re on day ${todayIndex() + 1}. The list has ${WORDS.length} native Japanese words and never repeats one; it runs through ${fmtDate(lastDate, { month: 'long', day: 'numeric', year: 'numeric' })}.</p>
@@ -522,6 +632,29 @@ function settingsView() {
       <div class="row">${DEMO ? `<a class="btn" href="${esc(PAGE_URL)}">Leave preview</a>` : '<button class="btn" data-action="signout">Sign out</button>'}</div>
     </section>
     <p class="muted small" style="text-align:center">Kotoba · version ${esc(APP_VERSION)}</p>`;
+}
+
+function voiceCard() {
+  if (!tts) return `<section class="card"><h2>Read-aloud voice</h2><p class="muted small" style="margin:0">This browser can’t read aloud.</p></section>`;
+  const cur = currentVoice(), saved = pref.get('voice', ''), rate = pref.get('rate', '0.9');
+  const tag = v => ['', '', '', ' · enhanced', ' · natural'][voiceTier(v)];
+  const voices = jaVoices.length ? `<label class="field">Voice
+        <select id="voice-pick">
+          <option value="" ${!saved ? 'selected' : ''}>Most natural available (${esc(jaVoices[0] ? voiceLabel(jaVoices[0]) : '')})</option>
+          ${jaVoices.map(v => `<option value="${esc(v.voiceURI)}" ${saved && cur === v ? 'selected' : ''}>${esc(voiceLabel(v) + tag(v))}</option>`).join('')}
+        </select>
+      </label>` : '';
+  const tip = voiceTip();
+  return `<section class="card">
+      <h2>Read-aloud voice</h2>
+      <p class="muted small" style="margin:0">Voices come from this device, so each device can sound different. Your choice is saved on this device only.</p>
+      ${voices}
+      <label class="field">Speed
+        <select id="voice-rate">${RATES.map(([r, l]) => `<option value="${r}" ${r === rate ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      </label>
+      ${tip ? `<div class="banner small" style="margin:12px 0 0">${esc(tip)}</div>` : ''}
+      <div class="row"><button class="btn" data-action="speak" data-text="こんにちは。今日もいい天気ですね。">${ICON.speak} Test the voice</button></div>
+    </section>`;
 }
 
 // ---------- notifications ----------
@@ -699,6 +832,10 @@ document.addEventListener('input', e => {
   if (e.target.id === 'rv-draft') ui.rv.draft = e.target.value;
 });
 document.addEventListener('change', async e => {
+  if (e.target.id === 'voice-pick' || e.target.id === 'voice-rate') {
+    pref.set(e.target.id === 'voice-pick' ? 'voice' : 'rate', e.target.value);
+    speak('こんにちは。今日もいい天気ですね。');
+  }
   if (e.target.id === 'notify-hour') {
     const h = +e.target.value;
     try { await store.updateProfile({ notify_hour: h }); toast(`Daily word at ${hourLabel(h)}.`); }

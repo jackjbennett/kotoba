@@ -412,7 +412,7 @@ window.KOTOBA_WORDS = [
       ["締め切りに{間に合わなかった}。", "I didn't make the deadline."],
       ["お金は足りる？—うん、{間に合って}いるよ。", "Do you have enough money? — Yeah, I'm fine."]
     ] },
-  { k: null, r: "いい加減", en: "sloppy; irresponsible; (also) \"that's enough already!\"", pos: "na-adjective",
+  { k: "いい加減", r: "いいかげん", en: "sloppy; irresponsible; (also) \"that's enough already!\"", pos: "na-adjective",
     note: "Written いい加減 (いい in kana). いい加減にして! = \"Cut it out!\"",
     ex: [
       ["彼は仕事が{いい加減}だ。", "He's sloppy with his work."],
